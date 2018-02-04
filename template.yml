@@ -1,0 +1,99 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+
+  BucketName:
+    Description: "The name of bucket, which contains resources."
+    Type: "String"
+
+  Stage:
+    Description: "The stage to deploy."
+    Type: "String"
+
+Resources:
+
+  BucketTrustRole:
+    Description: Role to enable api gateway to access the resources bucket
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "api-gateway-bucket-read-role"
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [apigateway.amazonaws.com]
+          Action: sts:AssumeRole
+      Path: /
+    
+  BucketReadPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn: BucketTrustRole
+    Description: Policy to enable access to bucket
+    Properties:
+      PolicyName: ResourcesBucketReadRolePolicy
+      PolicyDocument:
+        Statement:
+        - Action: ["s3:Get*", "s3:List*"]
+          Resource: 
+          - !Sub "arn:aws:s3:::${BucketName}"
+          - !Sub "arn:aws:s3:::${BucketName}/*"
+          Effect: Allow
+      Roles: [!Ref BucketTrustRole]
+  
+  Api:
+    Type: AWS::Serverless::Api
+    DependsOn: BucketTrustRole
+    Properties:
+      StageName: !Ref Stage
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          title:
+            Ref: AWS::StackName
+        schemes:
+          - "https"
+        paths:
+          "/{proxy+}":
+            x-amazon-apigateway-get-method:
+              parameters:
+              - name: "Accept"
+                in: "header"
+                required: false
+                type: "string"
+              - name: "proxy"
+                in: "path"
+                required: true
+                type: "string"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    content-length:
+                      type: "string"
+                    content-type:
+                      type: "string"
+                    Content-Length:
+                      type: "string"
+                    Content-Type:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                credentials: !GetAtt BucketTrustRole.Arn
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.content-type: "integration.response.header.Content-Type"
+                      method.response.header.Content-Type: "integration.response.header.Content-Type"
+                      method.response.header.Content-Length: "integration.response.header.Content-Length"
+                      method.response.header.content-length: "integration.response.header.Content-Length"
+                requestParameters:
+                  integration.request.header.Accept: "method.request.header.Accept"
+                  integration.request.path.proxy: "method.request.path.proxy"
+                uri:
+                  Fn::Sub: "arn:aws:apigateway:${AWS::Region}:s3:path/${BucketName}/{proxy}"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "GET"
+                type: "aws"
+          x-amazon-apigateway-binary-media-types:
+          - image/*
+          - application/octet-stream
