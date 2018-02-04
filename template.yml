@@ -54,7 +54,7 @@ Resources:
           - "https"
         paths:
           "/{proxy+}":
-            x-amazon-apigateway-get-method:
+            x-amazon-apigateway-any-method:
               parameters:
               - name: "Accept"
                 in: "header"
